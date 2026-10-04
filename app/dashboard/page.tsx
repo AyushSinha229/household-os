@@ -117,6 +117,7 @@ interface DashboardData {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -125,9 +126,17 @@ export default function DashboardPage() {
       setLoading(true);
       const res = await fetch("/api/dashboard");
       const json = await res.json();
-      setData(json);
-    } catch (err) {
+      if (res.ok && json.household && json.urgentAlerts) {
+        setData(json);
+        setFetchError(null);
+      } else {
+        setFetchError(json.error || "Failed to load household command center");
+        setData(null);
+      }
+    } catch (err: unknown) {
       console.error(err);
+      setFetchError(err instanceof Error ? err.message : "Network error");
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -211,17 +220,25 @@ export default function DashboardPage() {
     );
   }
 
-  if (!data) {
+  if (fetchError || !data) {
     return (
       <AppShell>
-        <div className="p-8 text-center bg-white rounded-xl border border-slate-200">
-          <p className="text-slate-600">Failed to load household command center.</p>
+        <div className="p-8 text-center bg-white rounded-xl border border-slate-200 max-w-lg mx-auto my-12 shadow-xs">
+          <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-3">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <h2 className="text-base font-bold text-slate-900 mb-1">
+            Household Command Center Connection
+          </h2>
+          <p className="text-xs text-slate-600 mb-4">
+            {fetchError || "Could not retrieve live household records."}
+          </p>
           <button
             type="button"
             onClick={fetchDashboard}
-            className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm"
+            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors"
           >
-            Retry
+            Retry Connection
           </button>
         </div>
       </AppShell>
