@@ -128,7 +128,7 @@ export default function MaintenanceSchedulePage() {
 
         {/* 1. Critical Overdue Section */}
         {data.overdue.length > 0 && (
-          <div className="bg-rose-50/60 border border-rose-200 rounded-xl p-5 space-y-3">
+          <div className="bg-rose-50 border border-rose-200 rounded-xl p-5 space-y-3">
             <div className="flex items-center gap-2 text-rose-900 font-bold text-sm">
               <ShieldAlert className="w-5 h-5 text-rose-600" />
               <span>Overdue Equipment Requiring Prompt Action ({data.overdue.length})</span>
@@ -154,12 +154,26 @@ export default function MaintenanceSchedulePage() {
 
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                     <span className="text-xs text-slate-500">Location: {asset.location}</span>
-                    <Link
-                      href={`/assets/${asset.id}`}
-                      className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
-                    >
-                      Book / Record Service
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/vendors?category=${encodeURIComponent(
+                          asset.category.includes("AC")
+                            ? "AC Repair & Service"
+                            : asset.category.includes("RO")
+                            ? "Plumber"
+                            : "Appliance Technician"
+                        )}`}
+                        className="px-2.5 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 hover:bg-teal-100 text-xs font-semibold"
+                      >
+                        Local Technician &rarr;
+                      </Link>
+                      <Link
+                        href={`/assets/${asset.id}`}
+                        className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
+                      >
+                        Book / Record
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ))}

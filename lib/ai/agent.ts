@@ -20,6 +20,31 @@ export interface AgentResponse {
     actionType: string;
     payload: Record<string, unknown>;
   }>;
+  cart?: {
+    items: Array<{
+      id: string;
+      productName: string;
+      brand?: string;
+      packSize: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+      retailer: string;
+      retailerUrl?: string;
+      valueScore?: string;
+      comparisonNotes?: string;
+    }>;
+    estimatedTotal: number;
+    totalItems: number;
+    continueToMerchantUrl: string;
+  };
+  replenishmentComparisons?: Array<{
+    itemName: string;
+    requiredQuantity: string;
+    options: string[];
+    bestOption: string;
+    reasoning: string;
+  }>;
 }
 
 const TOOL_FRIENDLY_LABELS: Record<string, string> = {
@@ -38,6 +63,11 @@ const TOOL_FRIENDLY_LABELS: Record<string, string> = {
   schedule_maintenance: "Logging scheduled appliance maintenance...",
   mark_bill_paid: "Recording bill payment in household ledger...",
   create_purchase_recommendation: "Generating procurement recommendation...",
+  refill_inventory: "Analyzing low-stock inventory, comparing quick-commerce options & preparing cart...",
+  shop_for_items: "Searching Swiggy Instamart catalog, comparing options & preparing live cart...",
+  search_products: "Searching live quick-commerce catalog...",
+  compare_products: "Comparing pack sizes, unit prices & value for money...",
+  add_to_cart: "Adding best-value items to household replenishment cart...",
 };
 
 export async function runHouseholdAgent(
@@ -111,9 +141,86 @@ export async function runHouseholdAgent(
       }
 
       const answer = response.response.text();
+
+      // Check if shop_for_items or refill_inventory was executed in the tool steps
+      const shopStep = steps.find(
+        (s) => (s.tool === "shop_for_items" || s.tool === "refill_inventory") && s.status === "completed"
+      );
+      const shopResult = shopStep?.result as any;
+
+      let cart = undefined;
+      let suggestedActions = undefined;
+      let replenishmentComparisons = undefined;
+
+      if (shopResult?.merchantCart) {
+        cart = {
+          items: shopResult.merchantCart.items.map((it: any) => ({
+            id: it.id || it.cartItemId,
+            productName: it.productName || it.name,
+            brand: it.brand,
+            packSize: it.packSize,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice ?? it.price ?? 0,
+            totalPrice: it.totalPrice ?? ((it.unitPrice ?? it.price ?? 0) * it.quantity),
+            retailer: "Swiggy Instamart",
+            retailerUrl: "https://www.swiggy.com/instamart",
+            valueScore: it.valueScore || (it.variantId ? `Variant ${it.variantId}` : undefined),
+            comparisonNotes: it.comparisonNotes,
+            skuId: it.skuId,
+            spinId: it.spinId,
+            variantId: it.variantId,
+          })),
+          estimatedTotal: shopResult.merchantCart.totalPayable || shopResult.merchantCart.itemTotal || shopResult.totalEstimatedCost,
+          totalItems: shopResult.merchantCart.itemCount || shopResult.merchantCart.totalItems,
+          continueToMerchantUrl: shopResult.openMerchantUrl || "https://www.swiggy.com/instamart",
+          selectedAddress: shopResult.selectedAddress,
+          addresses: shopResult.addresses,
+        };
+        suggestedActions = [
+          {
+            id: "act_open_merchant",
+            label: "Open Cart / Continue to Merchant",
+            actionType: "CONTINUE_TO_MERCHANT",
+            payload: { url: shopResult.openMerchantUrl || "https://www.swiggy.com/instamart" },
+          },
+        ];
+      } else if (shopResult?.cart) {
+        cart = shopResult.cart;
+        replenishmentComparisons = shopResult.comparisons;
+        suggestedActions = [
+          {
+            id: "act_open_merchant",
+            label: "Open Cart / Continue to Merchant",
+            actionType: "CONTINUE_TO_MERCHANT",
+            payload: { url: shopResult.cart.continueToMerchantUrl || "https://www.swiggy.com/instamart" },
+          },
+        ];
+      } else if (shopResult?.addressRequired) {
+        suggestedActions = [
+          {
+            id: "act_add_address",
+            label: "Add Delivery Address",
+            actionType: "ADD_ADDRESS",
+            payload: {},
+          },
+        ];
+      } else if (shopResult?.authenticated === false) {
+        suggestedActions = [
+          {
+            id: "act_connect_swiggy",
+            label: "Connect Swiggy Instamart",
+            actionType: "CONNECT_SWIGGY",
+            payload: { url: shopResult.authUrl || "/api/auth/swiggy/connect" },
+          },
+        ];
+      }
+
       return {
         answer,
         steps,
+        cart,
+        replenishmentComparisons,
+        suggestedActions,
       };
     } catch (geminiError) {
       console.warn("Gemini call error or rate limit, switching to intelligent deterministic household engine:", geminiError);
@@ -133,6 +240,136 @@ export async function runHouseholdAgent(
 async function runDeterministicHouseholdAgent(query: string): Promise<AgentResponse> {
   const steps: ToolExecutionStep[] = [];
   const q = query.toLowerCase();
+
+  // Pattern 0: Shopping, Refill & Ad-hoc Procurement workflow
+  const isShoppingRequest =
+    q.includes("refill") ||
+    q.includes("replenish") ||
+    q.includes("restock") ||
+    q.includes("also add") ||
+    q.includes("add a") ||
+    q.includes("add two") ||
+    q.includes("add 2") ||
+    q.includes("deodorant") ||
+    q.includes("shampoo") ||
+    q.includes("toothpaste") ||
+    q.includes("sensodyne") ||
+    q.includes("biscuit") ||
+    (q.includes("add") && (q.includes("milk") || q.includes("detergent") || q.includes("rice") || q.includes("oil") || q.includes("soap"))) ||
+    (q.includes("buy") && (q.includes("something") || q.includes("under") || q.includes("for cleaning")));
+
+  if (isShoppingRequest) {
+    steps.push({
+      tool: "shop_for_items",
+      status: "completed",
+      label: TOOL_FRIENDLY_LABELS["shop_for_items"],
+    });
+
+    const result = (await executeTool("shop_for_items", { request: query })) as any;
+
+    if (!result.authenticated) {
+      return {
+        answer: `**Swiggy Instamart isn't connected yet.**\n\nTo enable live quick-commerce discovery, real-time stock checks, value-for-money comparisons, and direct cart synchronization, please connect your Swiggy account.\n\nOnce connected via OAuth 2.1, Household OS will directly search the Instamart catalog and prepare your live cart.`,
+        steps,
+        suggestedActions: [
+          {
+            id: "act_connect_swiggy",
+            label: "Connect Swiggy Instamart",
+            actionType: "CONNECT_SWIGGY",
+            payload: { url: result.authUrl || "/api/auth/swiggy/connect" },
+          },
+        ],
+      };
+    }
+
+    if (result.addressRequired) {
+      return {
+        answer: `📍 **Delivery Address Required for Instamart**\n\n${result.message}\n\nPlease click **Add Delivery Address** below to enter your address or verify your location. Household OS will create it directly on Swiggy Instamart using the official MCP tool.`,
+        steps,
+        suggestedActions: [
+          {
+            id: "act_add_address",
+            label: "Add Delivery Address",
+            actionType: "ADD_ADDRESS",
+            payload: {},
+          },
+        ],
+      };
+    }
+
+    if (!result.merchantCart || result.merchantCart.items.length === 0) {
+      return {
+        answer: result.message || "No products could be added to your Instamart cart for this request.",
+        steps,
+      };
+    }
+
+    // Build breakdown for inventory replenishment vs ad-hoc items
+    const sections: string[] = [];
+    if (result.inventoryRefillItems && result.inventoryRefillItems.length > 0) {
+      const itemsList = result.inventoryRefillItems
+        .map((it: any) => {
+          if (it.selectedProduct) {
+            return `• **${it.itemName}** (${it.requiredQuantity})\n  → Selected: **${it.selectedProduct.name}** (${it.selectedProduct.packSize}) at **₹${it.selectedProduct.price}**\n  → *${it.comparisonReasoning || "Best value"}*`;
+          }
+          return `• **${it.itemName}**: Out of stock on Instamart`;
+        })
+        .join("\n");
+      sections.push(`### 📦 Inventory Replenishment\n${itemsList}`);
+    }
+
+    if (result.additionalItems && result.additionalItems.length > 0) {
+      const itemsList = result.additionalItems
+        .map((it: any) => {
+          if (it.selectedProduct) {
+            return `• **${it.userIntent}**\n  → Selected: **${it.selectedProduct.name}** (${it.selectedProduct.packSize}) at **₹${it.selectedProduct.price}**\n  → *${it.comparisonReasoning || "Matched intent & budget"}*`;
+          }
+          return `• **${it.userIntent}**: No matching product found`;
+        })
+        .join("\n");
+      sections.push(`### 🛍️ Requested Items\n${itemsList}`);
+    }
+
+    const answer = `🛒 **Swiggy Instamart Cart Prepared**\n\n${sections.join("\n\n")}\n\n**Total Estimated Cost:** ₹${result.totalEstimatedCost.toLocaleString("en-IN")}\n\nReview the items in your completed cart below. When ready, click **Open Cart / Continue to Merchant** to inspect and place your order in Swiggy Instamart.`;
+
+    const cart = {
+      items: result.merchantCart.items.map((it: any) => ({
+        id: it.id || it.cartItemId,
+        productName: it.productName || it.name,
+        brand: it.brand,
+        packSize: it.packSize,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice ?? it.price ?? 0,
+        totalPrice: it.totalPrice ?? ((it.unitPrice ?? it.price ?? 0) * it.quantity),
+        retailer: "Swiggy Instamart",
+        retailerUrl: "https://www.swiggy.com/instamart",
+        valueScore: it.valueScore || (it.variantId ? `Variant ${it.variantId}` : undefined),
+        comparisonNotes: it.comparisonNotes,
+        skuId: it.skuId,
+        spinId: it.spinId,
+        variantId: it.variantId,
+      })),
+      estimatedTotal: result.merchantCart.totalPayable || result.merchantCart.itemTotal || result.totalEstimatedCost,
+      totalItems: result.merchantCart.itemCount || result.merchantCart.totalItems,
+      continueToMerchantUrl: result.openMerchantUrl || "https://www.swiggy.com/instamart",
+      selectedAddress: result.selectedAddress,
+      addresses: result.addresses,
+    };
+
+    return {
+      answer,
+      steps,
+      cart,
+      suggestedActions: [
+        {
+          id: "act_open_merchant",
+          label: "Open Cart / Continue to Merchant",
+          actionType: "CONTINUE_TO_MERCHANT",
+          payload: { url: result.openMerchantUrl || "https://www.swiggy.com/instamart" },
+        },
+      ],
+    };
+  }
 
   // Pattern A: What should I buy? / Groceries / Low stock / What do I need to buy this week?
   if (

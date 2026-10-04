@@ -28,6 +28,11 @@ model Household {
   recommendations Recommendation[]
   activityLogs    ActivityLog[]
   aiConversations AIConversation[]
+  cartItems       CartItem[]
+  commerceSessions CommerceSession[]
+  vendors         Vendor[]
+  serviceRequests ServiceRequest[]
+  vendorContactLogs VendorContactLog[]
 }
 
 model HouseholdMember {
@@ -110,6 +115,7 @@ model Asset {
 
   household   Household           @relation(fields: [householdId], references: [id], onDelete: Cascade)
   maintenance MaintenanceRecord[]
+  serviceRequests ServiceRequest[]
 }
 
 model MaintenanceRecord {
@@ -145,6 +151,8 @@ model Bill {
   paymentMethod      String?   // UPI, Net Banking, Credit Card, Debit Card, Cash
   autoPay            Boolean   @default(false)
   referenceNumber    String?
+  units              Float?
+  consumption        String?   // e.g. "284 kWh", "12 kL"
   documentId         String?
   notes              String?
   createdAt          DateTime  @default(now())
@@ -181,8 +189,11 @@ model Task {
   dueDate                DateTime?
   assignedMemberId       String?
   status                 String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
-  category               String    @default("General") // Maintenance, Procurement, Chore, Bill Payment, Inspection
+  category               String    @default("General") // Maintenance, Procurement, Chore, Bill Payment, Inspection, Kitchen, Shopping, Cleaning, Errands, Finance, Family
   completedAt            DateTime?
+  sourceType             String?   // BILL, MAINTENANCE, INVENTORY, DOCUMENT, MANUAL
+  sourceId               String?
+  estimatedCost          Float?
   aiRecommendedMemberId  String?
   aiReason               String?
   createdAt              DateTime  @default(now())
@@ -205,6 +216,9 @@ model Document {
   rawText         String?
   extractedJson   String?  // JSON serialized extracted structured data
   confidenceScore Float    @default(0.95)
+  hash            String?  // SHA-256 for duplicate detection
+  impactAnalysis  String?  // Structured JSON findings, historical trends, proposed actions
+  duplicateOfId   String?  // References duplicate document if matched
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -287,3 +301,123 @@ model ActivityLog {
 
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 }
+
+model CartItem {
+  id              String   @id @default(cuid())
+  householdId     String
+  inventoryItemId String?
+  productName     String
+  brand           String?
+  packSize        String
+  quantity        Int      @default(1)
+  unitPrice       Float
+  totalPrice      Float
+  retailer        String   @default("Swiggy Instamart")
+  retailerUrl     String?
+  variantId       String?
+  skuId           String?
+  spinId          String?
+  comparisonNotes String?
+  valueScore      String?  // e.g. "Selected best value pack based on unit economics"
+  status          String   @default("PENDING_REVIEW") // PENDING_REVIEW, DISMISSED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+}
+
+model CommerceSession {
+  id                  String    @id @default(cuid())
+  householdId         String
+  provider            String    @default("swiggy-instamart")
+  accessToken         String?
+  tokenType           String?   @default("Bearer")
+  expiresAt           DateTime?
+  scope               String?   @default("mcp:tools")
+  selectedAddressId   String?
+  selectedAddressName String?
+  codeVerifier        String?
+  state               String?
+  lastSyncAt          DateTime?
+  metadata            String?   // JSON payload for cached delivery addresses or cart summary
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+  @@index([provider])
+}
+
+model Vendor {
+  id              String             @id @default(cuid())
+  householdId     String
+  name            String
+  businessName    String?
+  category        String             // Kirana / Grocery, Dairy & Milk, Fresh Fruits & Vegetables, AC Repair & Service, Electrician, Plumber, Appliance Technician, Water Can Delivery, Laundry / Ironing, Pest Control
+  phone           String
+  whatsappNumber  String?
+  address         String?
+  area            String?
+  city            String?            @default("Bengaluru")
+  services        String?            // comma-separated or JSON list of services/supplies provided
+  notes           String?
+  rating          Float              @default(4.8)
+  reviewCount     Int                @default(12)
+  isFavourite     Boolean            @default(false)
+  isTrusted       Boolean            @default(true)
+  isDemo          Boolean            @default(false)
+  availability    String             @default("Open Now") // Open Now, Closes 9 PM, Mon-Sat, On Call
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  household       Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  serviceRequests ServiceRequest[]
+  contactLogs     VendorContactLog[]
+
+  @@index([householdId])
+  @@index([category])
+}
+
+model ServiceRequest {
+  id            String    @id @default(cuid())
+  householdId   String
+  vendorId      String
+  assetId       String?
+  issue         String
+  category      String    // AC Repair, Plumbing, Electrical, Appliance Repair, Carpentry, Cleaning, General
+  preferredDate DateTime?
+  preferredTime String?   // Morning (9am-12pm), Afternoon (12pm-4pm), Evening (4pm-8pm)
+  status        String    @default("REQUESTED") // REQUESTED, CONTACTED, SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED
+  estimatedCost Float?
+  finalCost     Float?
+  notes         String?
+  whatsappUrl   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  household     Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vendor        Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  asset         Asset?    @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([householdId])
+  @@index([vendorId])
+  @@index([assetId])
+}
+
+model VendorContactLog {
+  id          String   @id @default(cuid())
+  householdId String
+  vendorId    String
+  actionType  String   // WHATSAPP_OPENED, CALL_INITIATED, SERVICE_REQUESTED
+  context     String?  // e.g. "Inventory Refill", "AC Repair", "Custom Inquiry"
+  messageSent String?
+  createdAt   DateTime @default(now())
+
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vendor      Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+  @@index([vendorId])
+}
+

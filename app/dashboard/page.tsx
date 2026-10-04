@@ -457,13 +457,28 @@ export default function DashboardPage() {
                     Pantry & Grocery Depletion Monitor
                   </h3>
                 </div>
-                <Link
-                  href="/inventory"
-                  className="text-xs text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1"
-                >
-                  <span>View All Inventory</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/inventory/smart-kitchen"
+                    className="text-xs text-teal-700 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-lg hover:bg-teal-100 font-semibold flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Smart Refill Hub</span>
+                  </Link>
+                  <Link
+                    href="/vendors"
+                    className="text-xs text-slate-600 hover:text-slate-900 font-medium px-2 py-1"
+                  >
+                    Local Vendors
+                  </Link>
+                  <Link
+                    href="/inventory"
+                    className="text-xs text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1"
+                  >
+                    <span>All Inventory</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
               </div>
 
               <div className="overflow-x-auto">

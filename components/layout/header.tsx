@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Search, Bell, Sparkles, MapPin } from "lucide-react";
 import { CommandBar } from "@/components/layout/command-bar";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 export function Header() {
   const [commandBarOpen, setCommandBarOpen] = useState(false);
@@ -15,7 +16,7 @@ export function Header() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700">
             <MapPin className="w-3.5 h-3.5 text-teal-600" />
-            <span>Flat 402, Palm Heights • Powai, Mumbai</span>
+            <span>Flat 402, Palm Heights • Satpur, Nashik</span>
           </div>
         </div>
 
@@ -37,7 +38,9 @@ export function Header() {
         </div>
 
         {/* Right: Quick Actions & Profile */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <ThemeToggle />
+
           <Link
             href="/assistant"
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100 text-xs font-medium transition-colors"

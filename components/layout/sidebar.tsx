@@ -18,12 +18,15 @@ import {
   Settings,
   Sparkles,
   ShieldCheck,
+  Store,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Smart Kitchen & Refill", href: "/inventory/smart-kitchen", icon: Sparkles },
   { label: "Smart Inventory", href: "/inventory", icon: Package },
+  { label: "Local Vendor Network", href: "/vendors", icon: Store },
   { label: "AI Procurement", href: "/procurement", icon: ShoppingCart },
   { label: "AI Assistant", href: "/assistant", icon: Bot, highlight: true },
   { label: "Document Intel", href: "/documents", icon: FileText },
@@ -32,7 +35,7 @@ const NAV_ITEMS = [
   { label: "Tasks & Chores", href: "/tasks", icon: CheckSquare },
   { label: "Household Bills", href: "/bills", icon: Receipt },
   { label: "Finance & Expenses", href: "/finance", icon: CreditCard },
-  { label: "Family Members", href: "/family", icon: Users },
+  { label: "Family Coordination", href: "/family", icon: Users },
   { label: "Activity Audit Feed", href: "/activity", icon: History },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
@@ -106,7 +109,7 @@ export function Sidebar() {
       {/* Footer info */}
       <div className="p-4 border-t border-slate-800 bg-slate-950/40">
         <div className="flex items-center justify-between text-xs text-slate-400">
-          <span>Powai, Mumbai</span>
+          <span>Satpur, Nashik</span>
           <span className="flex items-center gap-1 text-emerald-400">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             System Live

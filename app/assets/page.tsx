@@ -202,8 +202,8 @@ export default function AssetsPage() {
 
                     {/* Specs / Warranty */}
                     <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-600">
-                      <div className="p-2 bg-slate-50/60 rounded-md">
-                        <span className="text-slate-400 text-[10px] block">Next Due</span>
+                      <div className="p-2 bg-slate-50 rounded-md">
+                        <span className="text-slate-40 text-[12px] block">Next Due</span>
                         <span
                           className={`font-semibold ${
                             isOverdue ? "text-rose-600 font-bold" : "text-slate-900"
@@ -214,8 +214,8 @@ export default function AssetsPage() {
                             : `In ${maintenanceStatus.daysUntilNextService} days`}
                         </span>
                       </div>
-                      <div className="p-2 bg-slate-50/60 rounded-md">
-                        <span className="text-slate-400 text-[10px] block">Warranty</span>
+                      <div className="p-2 bg-slate-50 rounded-md">
+                        <span className="text-slate-40 text-[12px] block">Warranty</span>
                         <span className="font-semibold text-slate-900">
                           {maintenanceStatus.warrantyStatus.label}
                         </span>

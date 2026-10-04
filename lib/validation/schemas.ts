@@ -49,15 +49,45 @@ export const UtilityBillExtractionSchema = z.object({
   notes: z.string().optional(),
 });
 
+export const ServiceInvoiceExtractionSchema = z.object({
+  docType: z.literal("SERVICE_INVOICE"),
+  provider: z.string().describe("Service company e.g. Urban Company, Daikin Service, Local Technician"),
+  applianceOrItem: z.string().describe("What was serviced e.g. Split AC, RO Purifier"),
+  serviceType: z.string().default("Preventive"),
+  serviceDate: z.string().describe("Date of service in YYYY-MM-DD format"),
+  totalCost: z.number().nonnegative().describe("Total service cost in INR"),
+  technicianName: z.string().optional(),
+  technicianPhone: z.string().optional(),
+  nextServiceDueDate: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const GeneralDocumentExtractionSchema = z.object({
+  docType: z.literal("GENERAL_DOCUMENT"),
+  title: z.string().describe("Title or subject of the document"),
+  documentType: z.string().describe("e.g. Society Maintenance, Rent Agreement, Insurance, Tax Receipt"),
+  issuerOrVendor: z.string().describe("Issuing entity or vendor"),
+  date: z.string().optional(),
+  totalAmount: z.number().optional(),
+  dueDate: z.string().optional(),
+  summary: z.string().describe("Concise summary of document contents"),
+  recommendedAction: z.string().optional(),
+  notes: z.string().optional(),
+});
+
 export const DocumentExtractionUnionSchema = z.discriminatedUnion("docType", [
   GroceryReceiptExtractionSchema,
   ApplianceInvoiceExtractionSchema,
   UtilityBillExtractionSchema,
+  ServiceInvoiceExtractionSchema,
+  GeneralDocumentExtractionSchema,
 ]);
 
 export type ExtractedReceipt = z.infer<typeof GroceryReceiptExtractionSchema>;
 export type ExtractedAppliance = z.infer<typeof ApplianceInvoiceExtractionSchema>;
 export type ExtractedUtilityBill = z.infer<typeof UtilityBillExtractionSchema>;
+export type ExtractedServiceInvoice = z.infer<typeof ServiceInvoiceExtractionSchema>;
+export type ExtractedGeneralDoc = z.infer<typeof GeneralDocumentExtractionSchema>;
 export type DocumentExtractionResult = z.infer<typeof DocumentExtractionUnionSchema>;
 
 // --- Inventory Input Schemas ---

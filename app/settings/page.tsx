@@ -11,7 +11,9 @@ import {
   RefreshCw,
   Bell,
   Home,
+  Moon,
 } from "lucide-react";
+import { ThemeSelector } from "@/components/theme/theme-toggle";
 
 export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
@@ -57,7 +59,7 @@ export default function SettingsPage() {
             System Settings
           </h1>
           <p className="text-sm text-slate-500">
-            Configure Gemini AI API keys, household address details, and demonstration seed state.
+            Configure Gemini AI API keys, household appearance, address details, and demonstration seed state.
           </p>
         </div>
 
@@ -67,6 +69,18 @@ export default function SettingsPage() {
             <span>{resetSuccess}</span>
           </div>
         )}
+
+        {/* Theme & Appearance Card */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6">
+          <div className="flex items-center gap-2.5 mb-2">
+            <Moon className="w-4 h-4 text-teal-600" />
+            <h2 className="font-bold text-slate-900 text-sm">Theme &amp; Appearance</h2>
+          </div>
+          <p className="text-xs text-slate-500 leading-relaxed mb-4">
+            Customize the interface theme to your preference. Choose between high-contrast light mode, obsidian dark mode, or follow your system setting.
+          </p>
+          <ThemeSelector />
+        </div>
 
         {/* Gemini AI Key Card */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6">
@@ -126,7 +140,7 @@ export default function SettingsPage() {
               <input
                 type="text"
                 disabled
-                defaultValue="Powai, Mumbai, Maharashtra"
+                defaultValue="Satpur, Nashik, Maharashtra"
                 className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-slate-800 font-medium"
               />
             </div>

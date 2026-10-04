@@ -18,7 +18,10 @@ import {
   Database,
   ArrowRight,
   RotateCw,
+  MapPin,
 } from "lucide-react";
+import { RefillCartCard, CartData } from "@/components/assistant/refill-cart-card";
+import { AddressModal, AddressItem } from "@/components/assistant/address-modal";
 
 interface ToolStep {
   tool: string;
@@ -39,30 +42,48 @@ interface Message {
   content: string;
   steps?: ToolStep[];
   suggestedActions?: ActionProposal[];
+  cart?: CartData | null;
+  replenishmentComparisons?: Array<{
+    itemName: string;
+    requiredQuantity: string;
+    options: string[];
+    bestOption: string;
+    reasoning: string;
+  }> | null;
   createdAt: string;
 }
 
 const SAMPLE_QUESTIONS = [
+  "Refill inventory",
+  "Refill inventory and also add deodorant under ₹500",
+  "Add toothpaste, preferably Sensodyne",
+  "Buy something for cleaning the bathroom",
+  "Add two bottles of milk and a pack of biscuits",
   "What do I need to buy this week?",
   "Which appliances need maintenance?",
   "What bills are due in the next 7 days?",
   "Why did my electricity bill increase?",
   "What groceries will run out soon?",
-  "Who should handle today's pending tasks?",
-  "Prepare everything I need before leaving for 10 days.",
 ];
 
 function AssistantPageContent() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("q") || "";
+  const swiggyConnected = searchParams.get("swiggy_connected");
+  const swiggyError = searchParams.get("swiggy_error");
 
   const [input, setInput] = useState("");
+  const [swiggyStatus, setSwiggyStatus] = useState<{
+    connected: boolean;
+    provider?: string;
+    selectedAddressName?: string;
+  } | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "msg-1",
       role: "assistant",
       content:
-        "Namaste Ayush! I am your AI Household Operating Assistant. I continuously monitor your pantry inventory, appliance maintenance schedules, family chores, and Indian utility bills.\n\nAsk me anything about your household or select one of the suggested prompts below.",
+        "Namaste Ayush! I am your AI Household Operating Assistant. I continuously monitor your pantry inventory, appliance maintenance schedules, family chores, Indian utility bills, and live Swiggy Instamart replenishment.\n\nAsk me anything about your household or select one of the suggested prompts below.",
       createdAt: new Date().toISOString(),
     },
   ]);
@@ -70,7 +91,24 @@ function AssistantPageContent() {
   const [loading, setLoading] = useState(false);
   const [executingActionId, setExecutingActionId] = useState<string | null>(null);
   const [actionSuccessNotice, setActionSuccessNotice] = useState<string | null>(null);
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Check Swiggy connection status
+    fetch("/api/auth/swiggy/status")
+      .then((res) => res.json())
+      .then((data) => setSwiggyStatus(data))
+      .catch((err) => console.error("Error checking Swiggy status:", err));
+
+    if (swiggyConnected === "true") {
+      setActionSuccessNotice(
+        "✓ Swiggy Instamart connected successfully! Live product discovery and cart syncing are now active."
+      );
+    } else if (swiggyError) {
+      setActionSuccessNotice(`Notice from Swiggy OAuth: ${swiggyError}`);
+    }
+  }, [swiggyConnected, swiggyError]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -122,6 +160,8 @@ function AssistantPageContent() {
         content: data.answer || "I could not retrieve an answer from the database.",
         steps: data.steps,
         suggestedActions: data.suggestedActions,
+        cart: data.cart,
+        replenishmentComparisons: data.replenishmentComparisons,
         createdAt: new Date().toISOString(),
       };
 
@@ -144,6 +184,21 @@ function AssistantPageContent() {
   };
 
   const handleExecuteAction = async (action: ActionProposal) => {
+    if (action.actionType === "CONTINUE_TO_MERCHANT" && action.payload?.url) {
+      window.open(action.payload.url as string, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    if (action.actionType === "CONNECT_SWIGGY") {
+      window.location.href = (action.payload?.url as string) || "/api/auth/swiggy/connect";
+      return;
+    }
+
+    if (action.actionType === "ADD_ADDRESS") {
+      setIsAddressModalOpen(true);
+      return;
+    }
+
     setExecutingActionId(action.id);
     try {
       const res = await fetch("/api/actions/execute", {
@@ -201,9 +256,40 @@ function AssistantPageContent() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-emerald-400 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>DB Tools Active</span>
+          <div className="flex items-center gap-2.5">
+            {swiggyStatus?.connected ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 text-xs text-orange-300 bg-orange-950/70 border border-orange-500/40 px-2.5 py-1 rounded-full">
+                  <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                  <span>Swiggy MCP: Connected</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddressModalOpen(true)}
+                  className="flex items-center gap-1 text-xs text-orange-200 bg-orange-950/60 hover:bg-orange-900 border border-orange-500/40 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+                  title="View or change delivery address"
+                >
+                  <MapPin className="w-3 h-3 text-orange-400" />
+                  <span className="truncate max-w-[120px]">
+                    {swiggyStatus.selectedAddressName ? swiggyStatus.selectedAddressName.split(",")[0] : "Address"}
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <a
+                href="/api/auth/swiggy/connect"
+                className="flex items-center gap-1.5 text-xs text-amber-200 bg-amber-950/60 hover:bg-amber-900 border border-amber-600/40 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+                title="Connect real Swiggy Instamart account via OAuth 2.1"
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                <span>Connect Swiggy</span>
+              </a>
+            )}
+
+            <div className="flex items-center gap-2 text-xs text-emerald-400 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>DB Tools Active</span>
+            </div>
           </div>
         </div>
 
@@ -256,6 +342,14 @@ function AssistantPageContent() {
 
                 {/* Message text */}
                 <div className="whitespace-pre-wrap">{m.content}</div>
+
+                {/* Refill Cart Display */}
+                {m.cart && m.cart.items && m.cart.items.length > 0 && (
+                  <RefillCartCard
+                    initialCart={m.cart}
+                    comparisons={m.replenishmentComparisons}
+                  />
+                )}
 
                 {/* Suggested Action Confirmation Proposals */}
                 {m.suggestedActions && m.suggestedActions.length > 0 && (
@@ -358,6 +452,17 @@ function AssistantPageContent() {
             <Send className="w-4 h-4" />
           </button>
         </form>
+
+        {/* Address Selection & Management Modal */}
+        <AddressModal
+          isOpen={isAddressModalOpen}
+          onClose={() => setIsAddressModalOpen(false)}
+          onAddressSelected={(addr: AddressItem) => {
+            setSwiggyStatus((prev) => (prev ? { ...prev, selectedAddressName: addr.formattedAddress } : null));
+            setActionSuccessNotice(`Delivery address set to: ${addr.formattedAddress}`);
+            setTimeout(() => setActionSuccessNotice(null), 4000);
+          }}
+        />
       </div>
     </AppShell>
   );

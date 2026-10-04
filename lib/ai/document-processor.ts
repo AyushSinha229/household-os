@@ -5,7 +5,7 @@ import {
 } from "@/lib/validation/schemas";
 
 export interface ProcessedDocumentResult {
-  docType: "APPLIANCE_INVOICE" | "UTILITY_BILL" | "RECEIPT";
+  docType: "APPLIANCE_INVOICE" | "UTILITY_BILL" | "RECEIPT" | "SERVICE_INVOICE" | "GENERAL_DOCUMENT";
   data: DocumentExtractionResult;
   confidenceScore: number;
   rawSummary: string;

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { processDocumentFile } from "@/lib/ai/document-processor";
+import {
+  computeDocumentHash,
+  extractStage1Document,
+  performHouseholdImpactAnalysis,
+} from "@/lib/services/document-intelligence-service";
 
 export async function GET() {
   try {
@@ -23,7 +27,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { fileName, fileType, base64Data, sampleType } = body;
+    const { fileName, fileType, base64Data, sampleType, apiKey } = body;
+    const clientApiKey = req.headers.get("x-gemini-api-key") || apiKey;
 
     const household = await prisma.household.findFirst();
     if (!household) return NextResponse.json({ error: "Household not found" }, { status: 404 });
@@ -43,26 +48,56 @@ export async function POST(req: NextRequest) {
       effectiveFileType = "application/pdf";
     }
 
-    // Process document through multimodal AI or intelligent parser
-    const processed = await processDocumentFile({
+    // Compute SHA-256 hash for document content to prevent duplicate submissions
+    const contentToHash = base64Data || `${sampleType || "CUSTOM"}_${effectiveFileName}`;
+    const docHash = computeDocumentHash(contentToHash);
+
+    // ==========================================
+    // STAGE 1: PURE EXTRACTION (MULTIMODAL & TRANSCRIPTION)
+    // Inspects visual tables, net amount, GST, line items, and final total.
+    // Zero database assumptions or fake fallbacks.
+    // ==========================================
+    const stage1 = await extractStage1Document({
       fileName: effectiveFileName,
       fileType: effectiveFileType,
       base64Data,
+      apiKeyOverride: clientApiKey,
+      sampleType,
     });
 
-    // Save in Document table
+    // ==========================================
+    // STAGE 2: HOUSEHOLD MEMORY & IMPACT ANALYSIS
+    // Only runs on verified Stage 1 data.
+    // Checks existing assets/inventory, historical trends, and formulates actions.
+    // ==========================================
+    const impactAnalysis = await performHouseholdImpactAnalysis({
+      householdId: household.id,
+      stage1,
+      documentHash: docHash,
+    });
+
+    // Title generation from extracted content rather than raw filename
+    const docTitle =
+      stage1.applianceMetadata?.model ||
+      stage1.lineItems[0]?.description ||
+      `${stage1.vendor} ${stage1.docType.replace(/_/g, " ")}`;
+
+    // Persist in Document table
     const doc = await prisma.document.create({
       data: {
         householdId: household.id,
-        title: effectiveFileName.replace(/_/g, " ").replace(/\.[^/.]+$/, ""),
+        title: docTitle,
         originalName: effectiveFileName,
         fileType: effectiveFileType,
         fileSize: base64Data ? Math.round(base64Data.length * 0.75) : 156000,
         status: "EXTRACTED",
-        docType: processed.docType,
-        extractedJson: JSON.stringify(processed.data),
-        confidenceScore: processed.confidenceScore,
-        rawText: processed.rawSummary,
+        docType: stage1.docType,
+        extractedJson: JSON.stringify(stage1),
+        confidenceScore: stage1.fieldConfidence.finalTotal || 0.95,
+        rawText: stage1.rawText || stage1.fieldEvidence.finalTotal,
+        hash: docHash,
+        impactAnalysis: JSON.stringify(impactAnalysis),
+        duplicateOfId: impactAnalysis.duplicateDetails?.duplicateOfId,
       },
     });
 
@@ -70,19 +105,11 @@ export async function POST(req: NextRequest) {
     const extraction = await prisma.documentExtraction.create({
       data: {
         documentId: doc.id,
-        extractedType: processed.docType,
-        vendorOrBrand:
-          (processed.data as { brand?: string; vendor?: string; provider?: string }).brand ||
-          (processed.data as { vendor?: string }).vendor ||
-          (processed.data as { provider?: string }).provider,
-        invoiceNumber:
-          (processed.data as { billNumber?: string; serialNumber?: string }).billNumber ||
-          (processed.data as { serialNumber?: string }).serialNumber,
-        totalAmount:
-          (processed.data as { total?: number; purchasePrice?: number; totalAmount?: number }).total ||
-          (processed.data as { purchasePrice?: number }).purchasePrice ||
-          (processed.data as { totalAmount?: number }).totalAmount,
-        lineItems: JSON.stringify(processed.data),
+        extractedType: stage1.docType,
+        vendorOrBrand: stage1.vendor,
+        invoiceNumber: stage1.invoiceNumber || stage1.orderNumber,
+        totalAmount: stage1.finalTotal,
+        lineItems: JSON.stringify(stage1.lineItems),
         downstreamApplied: false,
       },
     });
@@ -91,9 +118,10 @@ export async function POST(req: NextRequest) {
       success: true,
       document: doc,
       extraction,
-      extractedData: processed.data,
-      summary: processed.rawSummary,
-      confidence: processed.confidenceScore,
+      stage1,
+      impactAnalysis,
+      summary: `${stage1.vendor}: ₹${stage1.finalTotal.toLocaleString("en-IN")}`,
+      confidence: stage1.fieldConfidence.finalTotal || 0.95,
     });
   } catch (error) {
     console.error("Document upload/process error:", error);

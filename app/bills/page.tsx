@@ -242,7 +242,37 @@ export default function BillsPage() {
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end">
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/family/tasks", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                title: `Pay ${bill.title} (${formatINR(bill.amount)})`,
+                                description: `Due on ${formatIndianDate(bill.dueDate)}. Provider: ${bill.provider}`,
+                                category: "Bill Payment",
+                                priority: "HIGH",
+                                sourceType: "BILL",
+                                sourceId: bill.id,
+                                estimatedCost: bill.amount,
+                              }),
+                            });
+                            if (res.ok) {
+                              setSuccessNotice(`Assigned payment of ${bill.title} to family coordinator!`);
+                              setTimeout(() => setSuccessNotice(null), 4000);
+                            }
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        }}
+                        className="px-3 py-2 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 hover:bg-teal-100 text-xs font-semibold cursor-pointer"
+                      >
+                        Assign Task
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => handlePayBill(bill)}

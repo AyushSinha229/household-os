@@ -186,7 +186,7 @@ export default function ProcurementPage() {
 
                     {/* Value Comparison & Alternatives */}
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                      <div className="p-2.5 bg-emerald-50/50 rounded-lg border border-emerald-100">
+                      <div className="p-2.5 bg-emerald-50 rounded-lg border border-emerald-100">
                         <span className="text-[10px] font-semibold text-emerald-800 uppercase block">
                           Optimal Pack Size
                         </span>

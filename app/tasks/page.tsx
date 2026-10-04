@@ -267,7 +267,7 @@ export default function TasksPage() {
 
                       {/* AI Recommendation Reason */}
                       {task.aiReason && (
-                        <div className="mt-2 text-[11px] text-teal-800 bg-teal-50/60 border border-teal-100 px-2 py-1 rounded-md inline-flex items-center gap-1.5">
+                        <div className="mt-2 text-[11px] text-teal-800 bg-teal-50 border border-teal-100 px-2 py-1 rounded-md inline-flex items-center gap-1.5">
                           <Sparkles className="w-3 h-3 text-teal-600 shrink-0" />
                           <span>AI Reason: {task.aiReason}</span>
                         </div>

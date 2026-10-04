@@ -12,6 +12,8 @@ import {
 } from "../lib/validation/schemas";
 import { executeTool } from "../lib/tools/registry";
 import { prisma } from "../lib/db/prisma";
+import { parseShoppingIntent } from "../lib/services/shopping-agent-service";
+import { generatePkcePair, getSwiggyAuthorizationUrl } from "../lib/integrations/commerce/swiggy-instamart/auth";
 
 async function runTestSuite() {
   console.log("==================================================");
@@ -214,6 +216,95 @@ async function runTestSuite() {
 
     // Clean up test task
     await prisma.task.delete({ where: { id: res.task.id } });
+  });
+
+  // 6. General AI Shopping Agent & Swiggy Instamart MCP Integration Tests
+  console.log("\n--- 6. General AI Shopping Agent & Swiggy Instamart MCP Integration Tests ---");
+
+  test("parseShoppingIntent handles 'Refill inventory' (inventory replenishment only)", () => {
+    const parsed = parseShoppingIntent("Refill inventory");
+    assert.strictEqual(parsed.refillLowStock, true);
+    assert.strictEqual(parsed.adHocItems.length, 0);
+  });
+
+  test("parseShoppingIntent handles 'Refill the inventory and also add deodorant.' (combined)", () => {
+    const parsed = parseShoppingIntent("Refill the inventory and also add deodorant.");
+    assert.strictEqual(parsed.refillLowStock, true);
+    assert.strictEqual(parsed.adHocItems.length, 1);
+    assert.strictEqual(parsed.adHocItems[0].query, "deodorant");
+  });
+
+  test("parseShoppingIntent handles ad-hoc request with budget 'Get me a deodorant under ₹500'", () => {
+    const parsed = parseShoppingIntent("Get me a deodorant under ₹500");
+    assert.strictEqual(parsed.adHocItems.length, 1);
+    assert.strictEqual(parsed.adHocItems[0].query, "deodorant");
+    assert.strictEqual(parsed.adHocItems[0].maxBudget, 500);
+  });
+
+  test("parseShoppingIntent handles brand constraint 'Add toothpaste, preferably Sensodyne'", () => {
+    const parsed = parseShoppingIntent("Add toothpaste, preferably Sensodyne");
+    assert.strictEqual(parsed.adHocItems.length, 1);
+    assert.strictEqual(parsed.adHocItems[0].brand, "Sensodyne");
+  });
+
+  test("parseShoppingIntent handles multi-item ad-hoc request 'Add two bottles of milk and a pack of biscuits'", () => {
+    const parsed = parseShoppingIntent("Add two bottles of milk and a pack of biscuits");
+    assert(parsed.adHocItems.length >= 2);
+    const milkItem = parsed.adHocItems.find((it) => it.query.includes("milk"));
+    const biscuitItem = parsed.adHocItems.find((it) => it.query.includes("biscuit"));
+    assert(milkItem !== undefined);
+    assert(biscuitItem !== undefined);
+    assert.strictEqual(milkItem?.quantity, 2);
+  });
+
+  test("generatePkcePair generates secure RFC 7636 S256 verifier and challenge", () => {
+    const pair = generatePkcePair();
+    assert(pair.codeVerifier.length >= 43);
+    assert(pair.codeChallenge.length >= 43);
+    assert(pair.state.length >= 16);
+  });
+
+  await test("getSwiggyAuthorizationUrl creates compliant OAuth 2.1 URL targeting Swiggy MCP server", async () => {
+    const auth = await getSwiggyAuthorizationUrl("http://localhost:3000/api/auth/swiggy/callback");
+    assert(auth.url.startsWith("https://mcp.swiggy.com/auth/authorize"));
+    assert(auth.url.includes("code_challenge="));
+    assert(auth.url.includes("code_challenge_method=S256"));
+    assert(auth.url.includes("scope=mcp%3Atools") || auth.url.includes("scope=mcp:tools"));
+  });
+
+  await test("executeTool('shop_for_items') truthfully executes with live Swiggy provider or reports auth status", async () => {
+    const result = (await executeTool("shop_for_items", {
+      request: "Get me a deodorant under ₹500",
+    })) as {
+      success: boolean;
+      authenticated: boolean;
+      message: string;
+      authUrl?: string;
+      merchantCart?: unknown;
+    };
+    if (result.authenticated) {
+      assert.strictEqual(result.authenticated, true);
+      assert(typeof result.message === "string");
+    } else {
+      assert.strictEqual(result.authenticated, false);
+      assert(result.message.includes("Instamart isn't connected yet"));
+      assert.strictEqual(result.authUrl, "/api/auth/swiggy/connect");
+    }
+  });
+
+  await test("executeTool('refill_inventory') truthfully executes with live Swiggy provider or reports auth status", async () => {
+    const result = (await executeTool("refill_inventory")) as {
+      success: boolean;
+      authenticated: boolean;
+      message: string;
+    };
+    if (result.authenticated) {
+      assert.strictEqual(result.authenticated, true);
+      assert(typeof result.message === "string");
+    } else {
+      assert.strictEqual(result.authenticated, false);
+      assert(result.message.includes("Instamart isn't connected yet") || result.message.includes("Swiggy"));
+    }
   });
 
   console.log("\n==================================================");

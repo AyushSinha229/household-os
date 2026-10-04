@@ -54,6 +54,8 @@ export async function POST(req: NextRequest) {
       answer: response.answer,
       steps: response.steps,
       suggestedActions: response.suggestedActions || [],
+      cart: response.cart || null,
+      replenishmentComparisons: response.replenishmentComparisons || null,
     });
   } catch (error) {
     console.error("AI Assistant error:", error);

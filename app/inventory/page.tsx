@@ -14,6 +14,7 @@ import {
   Clock,
   ArrowRight,
   RotateCw,
+  Sparkles,
 } from "lucide-react";
 import { formatINR } from "@/lib/utils";
 
@@ -176,6 +177,14 @@ export default function InventoryPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Link
+              href="/inventory/smart-kitchen"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold shadow-xs transition-colors"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Smart Refill Hub</span>
+            </Link>
+
             <Link
               href="/procurement"
               className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100 text-xs font-semibold transition-colors"
